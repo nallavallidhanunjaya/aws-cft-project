@@ -1,0 +1,136 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Resources": {
+      "S3Bucket": {
+        "Type": "AWS::S3::Bucket",
+        "Properties": {
+          "BucketName": "dhanu-bucket-1234",
+          "NotificationConfiguration": {
+            "LambdaConfigurations": [
+              {
+                "Event": "s3:ObjectCreated:*",
+                "Function": {
+                  "Fn::GetAtt": [
+                    "S3TriggeredLambda",
+                    "Arn"
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      },
+      "LambdaExecutionRole": {
+        "Type": "AWS::IAM::Role",
+        "Properties": {
+          "RoleName": "LambdaS3ExecutionRole",
+          "AssumeRolePolicyDocument": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Principal": {
+                  "Service": [
+                    "lambda.amazonaws.com"
+                  ]
+                },
+                "Action": [
+                  "sts:AssumeRole"
+                ]
+              }
+            ]
+          },
+          "Policies": [
+            {
+              "PolicyName": "S3AccessPolicy",
+              "PolicyDocument": {
+                "Version": "2012-10-17",
+                "Statement": [
+                  {
+                    "Effect": "Allow",
+                    "Action": [
+                      "s3:GetObject",
+                      "s3:PutObject",
+                      "s3:ListBucket"
+                    ],
+                    "Resource": [
+                      {
+                        "Fn::Sub": "arn:aws:s3:::${S3Bucket}"
+                      },
+                      {
+                        "Fn::Sub": "arn:aws:s3:::${S3Bucket}/*"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ],
+          "DependsOn":
+          [
+            "S3Bucket"
+          ]
+        }
+      },
+      "S3TriggeredLambda": {
+        "Type": "AWS::Lambda::Function",
+        "Properties": {
+          "FunctionName": "S3TriggeredLambdaFunction",
+          "Runtime": "python3.7",
+          "Handler": "lambda_function.lambda_handler",
+          "Code": {
+            "S3Bucket": "my-bucket-for-lambda-1", 
+            "S3Key": "my-lambda-code.zip" 
+          },
+          "Role": {
+            "Fn::GetAtt": [
+              "LambdaExecutionRole",
+              "Arn"
+            ]
+          },
+          "DependsOn": [
+            "LambdaPermissionForS3","S3Bucket"
+        ],
+          "MemorySize": 512,
+          "Timeout": 60,
+          "Environment": {
+            "Variables": {
+              "ENV_VAR_1": "value1",
+              "ENV_VAR_2": "value2"
+            }
+          }
+        }
+      },
+      "LambdaPermissionForS3": {
+        "Type": "AWS::Lambda::Permission",
+        "Properties": {
+          "FunctionName": {
+            "Ref": "S3TriggeredLambda"
+          },
+          "Action": "lambda:InvokeFunction",
+          "Principal": "s3.amazonaws.com",
+          "SourceArn": {
+            "Fn::GetAtt": [
+              "S3Bucket",
+              "Arn"
+            ]
+          }
+        }
+      }
+    },
+    "Outputs": {
+      "LambdaFunctionName": {
+        "Description": "Name of the Lambda function",
+        "Value": {
+          "Ref": "S3TriggeredLambda"
+        }
+      },
+      "S3BucketName": {
+        "Description": "Name of the S3 bucket",
+        "Value": {
+          "Ref": "S3Bucket"
+        }
+      }
+    }
+}
+  

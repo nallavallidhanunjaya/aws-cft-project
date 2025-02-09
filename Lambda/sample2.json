@@ -1,0 +1,20 @@
+"S3BucketNotification": {
+    "Type": "AWS::S3::Bucket",
+    "DeletionPolicy": "Retain",
+    "Properties": {
+        "BucketName": "my-bucket-for-lambda-1",
+        "NotificationConfiguration": {
+            "LambdaConfigurations": [
+                {
+                    "Event": "s3:ObjectCreated:*",
+                    "Function": {
+                        "Fn::GetAtt": [
+                            "S3TriggeredLambda",
+                            "Arn"
+                        ]
+                    }
+                }
+            ]
+        }
+    },
+    "DependsOn": "LambdaPermissionForS3"

@@ -1,0 +1,58 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Sample template for EC2 instance.
+Parameters:
+  InstanceTypeParameter:
+    Description: Enter t2.micro, mi.small, or mi.large. Default is t2.micro.
+    Type: String
+    Default: t2.micro
+    AllowedValues:
+      - t2.micro
+      - m1.small
+      - m1.large
+Resources:
+  MyEC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      AvailabilityZone: us-east-1a
+      ImageId: ami-066784287e358dad1
+      InstanceType: !Ref InstanceTypeParameter
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 8
+            VolumeType: gp2
+            DeleteOnTermination: true
+  MyIAMRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: MyEC2Role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: MyEC2Policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                  - s3:GetObject
+                Resource:
+                  - arn:aws:s3:::my-bucket
+                  - arn:aws:s3:::my-bucket/
+  MyIAMInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties: 
+      InstanceProfileName: MyEC2InstanceProfile
+      Roles:
+        - !Ref MyIAMRole
+Outputs:
+  InstanceId:
+    Description: The Instance ID of the created EC2 instance
+    Value: !Ref MyEC2Instance
+            

@@ -1,0 +1,151 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Sample template for EC2 instance.",
+    "Parameters": {
+      "InstanceTypeParameter": {
+        "Description": "Enter t2.micro, mi.small, or mi.large. Default is t2.micro.",
+        "Type": "String",
+        "Default": "t2.micro",
+        "AllowedValues": [
+          "t2.micro",
+          "m1.small",
+          "m1.large"
+        ]
+      }
+    },
+    "Resources": {
+      "MyEC2Instance": {
+        "Type": "AWS::EC2::Instance",
+        "Properties": {
+          "AvailabilityZone": "us-east-1a",
+          "ImageId": "ami-066784287e358dad1",
+          "InstanceType": {
+            "Ref": "InstanceTypeParameter"
+          },
+          "IamInstanceProfile": {
+            "Ref": "MyIAMInstanceProfile"
+          },
+          "BlockDeviceMappings": [
+            {
+              "DeviceName": "/dev/xvda",
+              "Ebs": {
+                "VolumeSize": 8,
+                "VolumeType": "gp2",
+                "DeleteOnTermination": true
+              }
+            }
+          ],
+          "UserData": {
+            "Fn::Base64": {
+                "Fn::Join":[
+                    "",
+                    [
+                        "#!/bin/bash\n",
+                        "set -x \n",
+                        "exec > >(tee /var/log/user-data.log|logger -t user-data) 2>&1 \n",
+                        "\n",
+                        "yum update -y\n",
+                        "\n",
+                        "yum install -y python3\n",
+                        "echo \"Installing AWS CLI... \"\n",
+                        "\n",
+                        "yum install -y aws-cli\n",
+                        "\n",
+                        "# Install pip for Python package management\n",
+                        "curl -O https://bootstrap.pypa.io/get-pip.py\n",
+                        "python3 get-pip.py\n",
+                        "\n",
+                        "pip3 install boto3 requests\n",
+                        "\n"
+                    ]
+                ]
+            }
+          }
+        }
+      },
+      "NewVolume":{
+        "Type" : "AWS::EC2::Volume",
+        "Properties" : {
+            "Size" : 1,
+            "AvailabilityZone" : 
+            { 
+                "Fn::GetAtt" : [ "MyEC2Instance", "AvailabilityZone" ] 
+            },
+            "Tags" : [ {
+            "Key" : "MyTag",
+            "Value" : "TagValue"
+                } ]
+        }
+      },
+      "MountPoint":{
+            "DependsOn": "MyEC2Instance",
+            "Type" : "AWS::EC2::VolumeAttachment",
+            "Properties" : {
+                "Device" : "/dev/sdh",
+                "InstanceId" : {
+                  "Ref": "MyEC2Instance"
+                },
+                "VolumeId" : {
+                  "Ref": "NewVolume"
+                }
+          }   
+      },
+      "MyIAMRole": {
+        "Type": "AWS::IAM::Role",
+        "Properties": {
+          "AssumeRolePolicyDocument": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Principal": {
+                  "Service": "ec2.amazonaws.com"
+                },
+                "Action": "sts:AssumeRole"
+              }
+            ]
+          },
+          "Policies": [
+            {
+              "PolicyName": "MyEC2Policy",
+              "PolicyDocument": {
+                "Version": "2012-10-17",
+                "Statement": [
+                  {
+                    "Effect": "Allow",
+                    "Action": [
+                      "s3:ListBucket",
+                      "s3:GetObject"
+                    ],
+                    "Resource": [
+                      "arn:aws:s3:::my-bucket-dj",
+                      "arn:aws:s3:::my-bucket-dj/"
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "MyIAMInstanceProfile": {
+        "Type": "AWS::IAM::InstanceProfile",
+        "Properties": {
+          "Roles": [
+            {
+                "Ref": "MyIAMRole"
+            }
+          ]
+        }
+      }
+
+    },
+    "Outputs": {
+      "InstanceId": {
+        "Description": "The Instance ID of the created EC2 instance",
+        "Value": {
+            "Ref": "MyEC2Instance"
+        }
+      }
+    }
+  }

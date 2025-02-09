@@ -1,0 +1,313 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Sample template for web application with Two Tier architecture.",
+    "Parameters": {
+
+    },
+    "Resources": {
+        "MyVPC": {
+        "Type": "AWS::EC2::VPC",
+        "Properties": {
+            "CidrBlock": "10.0.0.0/16",
+            "EnableDnsSupport": true,
+            "EnableDnsHostnames": true
+        } 
+       },
+       "MyVPCPublicSubnet1": {
+            "Type" : "AWS::EC2::Subnet",
+            "Properties" : {
+                "AvailabilityZone" : "us-east-1a",
+                "CidrBlock": "10.0.0.0/20",
+                "VpcId" : {
+                    "Ref": "MyVPC"
+                },
+                "MapPublicIpOnLaunch": true
+            }
+        },
+        "MyVPCPublicSubnet2": {
+            "Type" : "AWS::EC2::Subnet",
+            "Properties" : {
+                "AvailabilityZone" : "us-east-1b",
+                "CidrBlock": "10.0.16.0/20",
+                "VpcId" : {
+                    "Ref": "MyVPC"
+                },
+                "MapPublicIpOnLaunch": true
+            }
+        },
+        "MyVPCPrivateSubnet1": {
+            "Type" : "AWS::EC2::Subnet",
+            "Properties" : {
+                "AvailabilityZone" : "us-east-1a",
+                "CidrBlock": "10.0.128.0/20",
+                "VpcId" : {
+                    "Ref": "MyVPC"
+                },
+                "MapPublicIpOnLaunch": false
+            }
+        },
+        "MyVPCPrivateSubnet2": {
+            "Type" : "AWS::EC2::Subnet",
+            "Properties" : {
+                "AvailabilityZone" : "us-east-1b",
+                "CidrBlock": "10.0.144.0/20",
+                "VpcId" : {
+                    "Ref": "MyVPC"
+                },
+                "MapPublicIpOnLaunch": false
+            }
+        },
+        "MyInternetGateway": {
+            "Type": "AWS::EC2::InternetGateway",
+            "Properties": {}
+          },
+        "MyVPCGatewayAttachment": {
+        "Type": "AWS::EC2::VPCGatewayAttachment",
+        "Properties": {
+            "VpcId": {
+            "Ref": "MyVPC"
+            },
+            "InternetGatewayId": {
+            "Ref": "MyInternetGateway"
+            }
+        }
+        },
+        "MyPublicRouteTable": {
+        "Type": "AWS::EC2::RouteTable",
+        "Properties": {
+            "VpcId": {
+            "Ref": "MyVPC"
+                }
+            }
+        },
+        "MyPublicRoute": {
+        "Type": "AWS::EC2::Route",
+        "Properties": {
+            "RouteTableId": {
+            "Ref": "MyPublicRouteTable"
+            },
+            "DestinationCidrBlock": "0.0.0.0/0",
+            "GatewayId": {
+            "Ref": "MyInternetGateway"
+                }
+            }
+        },
+        "MyPublicSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+              "SubnetId": {
+                "Ref": "MyVPCPublicSubnet1"
+              },
+              "RouteTableId": {
+                "Ref": "MyPublicRouteTable"
+              }
+            }
+          },
+        "MyPublicSubnet2RouteTableAssociation": {
+        "Type": "AWS::EC2::SubnetRouteTableAssociation",
+        "Properties": {
+            "SubnetId": {
+            "Ref": "MyVPCPublicSubnet2"
+            },
+            "RouteTableId": {
+            "Ref": "MyPublicRouteTable"
+            }
+            }
+        },
+        "MyAutoScalingGroup":{
+            "DependsOn":"MyLaunchTemplate",
+            "Type" : "AWS::AutoScaling::AutoScalingGroup",
+            "Properties":{
+                "AutoScalingGroupName" : "aws-project-prod",
+                "DesiredCapacity" : 2,
+                "LaunchTemplate" : {
+                    "LaunchTemplateId" : {
+                        "Ref": "MyLaunchTemplate"
+                    },
+                    "Version": 1
+                  },
+                "MaxSize" : 3,
+                "MinSize" : 1,
+                "VPCZoneIdentifier" :[
+                    {
+                        "Ref": "MyVPCPrivateSubnet1"
+                    },
+                    {
+                        "Ref": "MyVPCPrivateSubnet2"
+                    }
+                ]
+            }
+        },
+        "MyLaunchTemplate": {
+            "Type" : "AWS::EC2::LaunchTemplate",
+            "Properties" : {
+                "LaunchTemplateData" : {
+                    "ImageId": "ami-04b4f1a9cf54c11d0",
+                    "InstanceType" : "t2.micro",
+                    "KeyName" : "FirstKey",
+                    "IamInstanceProfile": {
+                        "Name": {
+                            "Ref": "MyIAMInstanceProfile"
+                        }
+                    },
+                    "SecurityGroupIds" : 
+                    [
+                      {
+                        "Ref": "MySecurityGroup"
+                        }
+                    ],
+                    "UserData": { 
+                        "Fn::Base64": {
+                            "Fn::Join": [
+                            "",
+                            [
+                                "#!/bin/bash\n",
+                                "sudo apt update -y\n",
+                                "sudo apt install -y python3\n",
+                                "cd /home/ubuntu\n",
+                                "nohup python3 -m http.server 8000 > server.log 2>&1 &\n"
+                            ]
+                            ]
+                        }
+                    }
+                },
+                "LaunchTemplateName" : "aws-project-prod-template"
+            }
+        },
+        "MySecurityGroup":{
+            "Type" : "AWS::EC2::SecurityGroup",
+            "Properties" : {
+                "GroupDescription" : "This Group is created for the Two Tier prod project",
+                "GroupName" : "aws-project-prod-sg",
+                "SecurityGroupIngress" : [
+                    {
+                        "FromPort" : 8000,
+                        "ToPort": 8000,
+                        "IpProtocol" : "tcp",
+                        "CidrIp": "0.0.0.0/0",
+                        "Description" : "This security rule is to allow 8000 traffic for web server"
+                    },
+                    {
+                        "FromPort" : 80,
+                        "ToPort": 80,
+                        "IpProtocol" : "tcp",
+                        "CidrIp": "0.0.0.0/0",
+                        "Description" : "This security rule is to allow http traffic to web server"
+                    },
+                    {
+                      "FromPort" : 22,
+                      "ToPort": 22,
+                      "IpProtocol" : "tcp",
+                      "CidrIp": "0.0.0.0/0",
+                      "Description" : "This security rule is to allow ssh traffic to web server"
+                  }
+                 ],
+                "VpcId" : {
+                    "Ref":"MyVPC"
+                }
+              }
+        },
+        "MyIAMRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+              "AssumeRolePolicyDocument": {
+                "Version": "2012-10-17",
+                "Statement": [
+                  {
+                    "Effect": "Allow",
+                    "Principal": {
+                      "Service": "ec2.amazonaws.com"
+                    },
+                    "Action": "sts:AssumeRole"
+                  }
+                ]
+              },
+              "Policies": [
+                {
+                  "PolicyName": "MyEC2Policy",
+                  "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                      {
+                        "Effect": "Allow",
+                        "Action": [
+                          "s3:ListBucket",
+                          "s3:GetObject",
+                          "ec2:DescribeInstances"
+                        ],
+                        "Resource": [
+                          "arn:aws:s3:::my-bucket-dj",
+                          "arn:aws:s3:::my-bucket-dj/*"
+                        ]
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+        "MyIAMInstanceProfile": {
+            "Type": "AWS::IAM::InstanceProfile",
+            "Properties": {
+              "Roles": [
+                {
+                    "Ref": "MyIAMRole"
+                }
+              ]
+            }
+        },
+        "MyTargetGroup": {
+          "Type" : "AWS::ElasticLoadBalancingV2::TargetGroup",
+          "Properties": {
+            "Name" : "aws-project-prod-TG",
+            "VpcId":{
+              "Ref": "MyVPC"
+            },
+            "Port": 8000,
+            "TargetType": "instance",
+            "Protocol": "HTTP",
+            "ProtocolVersion": "HTTP1",
+            "IpAddressType":"ipv4"
+          }
+        },
+        "MyLoadBalancer": {
+            "Type" : "AWS::ElasticLoadBalancingV2::LoadBalancer",
+            "Properties":{
+              "Name" : "aws-project-prod-LB",
+              "IpAddressType": "ipv4",
+              "Scheme": "internet-facing",
+              "Subnets" : [
+                {
+                  "Ref": "MyVPCPublicSubnet1"
+                },
+                {
+                  "Ref": "MyVPCPublicSubnet2"
+                }
+                ],
+              "SecurityGroups" : [{
+                "Ref": "MySecurityGroup"
+              }],
+              "Type": "application"
+            }
+          },
+        "MyListener": {
+        "Type" : "AWS::ElasticLoadBalancingV2::Listener",
+        "Properties":{
+            "LoadBalancerArn": {
+            "Ref": "MyLoadBalancer"
+            },
+            "Port": 80,
+            "Protocol": "HTTP",
+            "DefaultActions" : [
+            {
+                "Type" : "forward",
+                "TargetGroupArn": {
+                "Ref": "MyTargetGroup"
+                }
+            }
+            ]
+        }
+        }
+    }
+
+  }
