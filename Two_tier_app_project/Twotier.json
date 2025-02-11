@@ -277,7 +277,8 @@
             "VpcId":{
               "Ref": "MyVPC"
             },
-            "TargetType": "instance"
+            "TargetType": "instance",
+            "Protocol": "HTTP"
           }
         },
         "MyListener": {

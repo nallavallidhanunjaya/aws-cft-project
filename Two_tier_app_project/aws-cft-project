@@ -2,7 +2,16 @@
     "AWSTemplateFormatVersion": "2010-09-09",
     "Description": "Sample template for web application with Two Tier architecture.",
     "Parameters": {
-
+      "InstanceTypeParameter": {
+              "Description": "Enter t2.micro, mi.small, or mi.large. Default is t2.micro.",
+              "Type": "String",
+              "Default": "t2.micro",
+              "AllowedValues": [
+                "t2.micro",
+                "m1.small",
+                "m1.large"
+              ]
+      }
     },
     "Resources": {
         "MyVPC": {
@@ -128,6 +137,11 @@
                   },
                 "MaxSize" : 3,
                 "MinSize" : 1,
+                "TargetGroupARNs": [
+                  { 
+                    "Ref": "MyTargetGroup" 
+                  }
+                ],
                 "VPCZoneIdentifier" :[
                     {
                         "Ref": "MyVPCPrivateSubnet1"
@@ -143,7 +157,9 @@
             "Properties" : {
                 "LaunchTemplateData" : {
                     "ImageId": "ami-04b4f1a9cf54c11d0",
-                    "InstanceType" : "t2.micro",
+                    "InstanceType" : {
+                      "Ref": "InstanceTypeParameter"
+                    } ,
                     "KeyName" : "FirstKey",
                     "IamInstanceProfile": {
                         "Name": {
@@ -162,10 +178,22 @@
                             "",
                             [
                                 "#!/bin/bash\n",
+                                "set -x \n",
+                                "exec > >(tee /var/log/user-data.log|logger -t user-data) 2>&1 \n",
                                 "sudo apt update -y\n",
                                 "sudo apt install -y python3\n",
-                                "cd /home/ubuntu\n",
-                                "nohup python3 -m http.server 8000 > server.log 2>&1 &\n"
+                                "mkdir -p /home/ubuntu/myserver\n",
+                                "\n",
+                                "echo '<html>\n",
+                                "<head><title>Simple Python Server</title></head>\n",
+                                "<body>\n",
+                                "<h1>Hello from the EC2 instance!</h1>\n",
+                                "<p>This is a simple Python HTTP server.</p>\n",
+                                "</body>\n",
+                                "</html>' > /home/ubuntu/myserver/index.html\n",
+                                "\n",
+                                "cd /home/ubuntu/myserver\n",
+                                "python3 -m http.server 8000 > server.log 2>&1 &\n"
                             ]
                             ]
                         }

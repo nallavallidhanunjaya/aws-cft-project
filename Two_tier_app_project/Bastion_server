@@ -1,0 +1,125 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Sample template for EC2 instance.",
+    "Parameters": {
+      "InstanceTypeParameter": {
+        "Description": "Enter t2.micro, mi.small, or mi.large. Default is t2.micro.",
+        "Type": "String",
+        "Default": "t2.micro",
+        "AllowedValues": [
+          "t2.micro",
+          "m1.small",
+          "m1.large"
+        ]
+      }
+    },
+    "Resources": {
+      "MyEC2Instance": {
+        "Type": "AWS::EC2::Instance",
+        "Properties": {
+          "AvailabilityZone": "us-east-1a",
+          "ImageId": "ami-04b4f1a9cf54c11d0",
+          "InstanceType": {
+            "Ref": "InstanceTypeParameter"
+          },
+          "IamInstanceProfile": {
+            "Ref": "MyIAMInstanceProfile"
+          },
+          "BlockDeviceMappings": [
+            {
+              "DeviceName": "/dev/xvda",
+              "Ebs": {
+                "VolumeSize": 8,
+                "VolumeType": "gp2",
+                "DeleteOnTermination": true
+              }
+            }
+          ],
+          "KeyName" : "FirstKey",
+          "UserData": {
+            "Fn::Base64": {
+                "Fn::Join":[
+                    "",
+                    [
+                        "#!/bin/bash\n",
+                        "set -x \n",
+                        "exec > >(tee /var/log/user-data.log|logger -t user-data) 2>&1 \n",
+                        "sudo apt update -y\n",
+                        "sudo apt install -y python3\n",
+                        "mkdir -p /home/ubuntu/myserver\n",
+                        "\n",
+                        "echo '<html>\n",
+                        "<head><title>Simple Python Server</title></head>\n",
+                        "<body>\n",
+                        "<h1>Hello from the EC2 instance!</h1>\n",
+                        "<p>This is a simple Python HTTP server.</p>\n",
+                        "</body>\n",
+                        "</html>' > /home/ubuntu/myserver/index.html\n",
+                        "\n",
+                        "cd /home/ubuntu/myserver\n",
+                        "python3 -m http.server 8000 > server.log 2>&1 &\n"
+                    ]
+                ]
+            }
+          }
+        }
+      },
+      "MyIAMRole": {
+        "Type": "AWS::IAM::Role",
+        "Properties": {
+          "AssumeRolePolicyDocument": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Principal": {
+                  "Service": "ec2.amazonaws.com"
+                },
+                "Action": "sts:AssumeRole"
+              }
+            ]
+          },
+          "Policies": [
+            {
+              "PolicyName": "MyEC2Policy",
+              "PolicyDocument": {
+                "Version": "2012-10-17",
+                "Statement": [
+                  {
+                    "Effect": "Allow",
+                    "Action": [
+                      "s3:ListBucket",
+                      "s3:GetObject"
+                    ],
+                    "Resource": [
+                      "arn:aws:s3:::my-bucket-dj",
+                      "arn:aws:s3:::my-bucket-dj/*"
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "MyIAMInstanceProfile": {
+        "Type": "AWS::IAM::InstanceProfile",
+        "Properties": {
+          "Roles": [
+            {
+                "Ref": "MyIAMRole"
+            }
+          ]
+        }
+      }
+
+    },
+    "Outputs": {
+      "InstanceId": {
+        "Description": "The Instance ID of the created EC2 instance",
+        "Value": {
+            "Ref": "MyEC2Instance"
+        }
+      }
+    }
+  }
